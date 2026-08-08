@@ -1,0 +1,289 @@
+:root {
+  --bg-0: #ffffff;
+  --bg-1: #f6f9f6;
+  --bg-2: #edf3ed;
+  --bg-3: #e0eae0;
+  --border: #d9e4d9;
+  --text-0: #1a2420;
+  --text-1: #56655b;
+  --text-2: #8b9a90;
+  --accent: #16a34a;
+  --accent-hover: #22c55e;
+  --accent-glow: rgba(22, 163, 74, 0.28);
+  --success: #4ade80;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-family: "Segoe UI", "Inter", -apple-system, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+button, input, select { font-family: inherit; }
+
+/* ---------------- Titlebar ---------------- */
+.titlebar {
+  -webkit-app-region: drag;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+}
+.titlebar-brand { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: var(--text-1); }
+.titlebar-brand span { color: var(--accent); }
+.titlebar-controls { -webkit-app-region: no-drag; display: flex; gap: 4px; }
+.tb-btn {
+  width: 32px; height: 26px; border: none; background: transparent;
+  color: var(--text-1); border-radius: 6px; cursor: pointer; font-size: 13px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tb-btn:hover { background: var(--bg-3); color: var(--text-0); }
+.tb-close:hover { background: #e5484d; color: white; }
+
+/* ---------------- Shell / Sidebar ---------------- */
+.app-shell { display: flex; height: calc(100% - 40px); }
+
+.sidebar {
+  width: 230px;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+  gap: 6px;
+}
+.sidebar-logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 18px;
+  color: var(--accent);
+}
+.sidebar-logo svg { overflow: visible; }
+.leaf-sway {
+  transform-origin: 60% 82%; /* pivots near the stem, like it's attached to a branch */
+  animation: leafSway 3.6s ease-in-out infinite;
+}
+@keyframes leafSway {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(7deg); }
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-1);
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.nav-item:hover { background: var(--bg-3); color: var(--text-0); }
+.nav-item.active { background: linear-gradient(135deg, var(--accent), #0d7a37); color: white; box-shadow: 0 4px 14px var(--accent-glow); }
+.nav-icon { font-size: 15px; }
+
+.sidebar-account {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+.account-avatar {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: var(--bg-3); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: var(--accent);
+}
+.account-name { font-size: 13px; font-weight: 600; }
+.account-type { font-size: 11px; color: var(--text-2); }
+
+/* ---------------- Content ---------------- */
+.content { flex: 1; padding: 32px 40px; overflow-y: auto; }
+.view { display: none; }
+.view.active { display: block; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.view-header { margin-bottom: 24px; }
+.view-header h1 { font-size: 26px; font-weight: 700; }
+.subtitle { color: var(--text-2); font-size: 13.5px; margin-top: 4px; }
+
+.panel {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.dashboard-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
+
+/* ---------------- Play panel ---------------- */
+.play-panel { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 36px 24px; }
+.version-select-row { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.version-select-row label { font-size: 12px; color: var(--text-2); }
+
+select, input {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-0);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+.play-button {
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  border: none;
+  background: radial-gradient(circle at 35% 30%, var(--accent-hover), var(--accent) 60%, #0d7a37 100%);
+  color: white;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 8px 30px var(--accent-glow), inset 0 2px 6px rgba(255,255,255,0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.play-button:hover { transform: scale(1.045); box-shadow: 0 10px 40px var(--accent-glow), inset 0 2px 6px rgba(255,255,255,0.3); }
+.play-button:active { transform: scale(0.98); }
+.play-icon { font-size: 30px; }
+.play-label { font-size: 18px; font-weight: 800; letter-spacing: 2px; }
+
+.progress-wrap { width: 100%; }
+.progress-bar { height: 8px; background: var(--bg-2); border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--success)); transition: width 0.2s ease; }
+.progress-text { margin-top: 6px; font-size: 12px; color: var(--text-2); text-align: center; }
+
+/* ---------------- Log panel ---------------- */
+.news-panel h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-1); }
+.log-box {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-1);
+  height: 260px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* ---------------- Login panel ---------------- */
+.login-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.tab-btn {
+  flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-2); color: var(--text-1); cursor: pointer; font-size: 13px;
+  transition: all 0.15s ease;
+}
+.tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.tab-content { display: none; flex-direction: column; gap: 10px; }
+.tab-content.active { display: flex; }
+.tab-content label { font-size: 12px; color: var(--text-2); }
+.hint { font-size: 11.5px; color: var(--text-2); line-height: 1.5; }
+
+.accent-button {
+  background: linear-gradient(135deg, var(--accent), #0d7a37);
+  color: white; border: none; border-radius: 8px;
+  padding: 11px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.accent-button:hover { filter: brightness(1.1); }
+.accent-button:active { transform: scale(0.98); }
+
+/* ---------------- Modpack loader cards ---------------- */
+.loader-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.loader-card { display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+.loader-card h3 { color: var(--accent); font-size: 15px; }
+
+/* ---------------- Settings ---------------- */
+#view-settings .panel { display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
+#view-settings label { font-size: 12px; color: var(--text-2); margin-top: 8px; }
+
+/* ---------------- Source toggle (Dashboard: version vs modpack) ---------------- */
+.source-toggle { display: flex; gap: 8px; width: 100%; margin-bottom: 4px; }
+.source-btn {
+  flex: 1; padding: 9px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-2); color: var(--text-1); cursor: pointer; font-size: 12.5px;
+  transition: all 0.15s ease;
+}
+.source-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.source-block { display: none; width: 100%; flex-direction: column; gap: 10px; }
+.source-block.active { display: flex; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); cursor: pointer; }
+.checkbox-row input { width: auto; }
+
+/* ---------------- Disabled PLAY button ---------------- */
+.play-button:disabled,
+.play-button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(40%);
+  pointer-events: none;
+}
+.play-button:disabled:hover,
+.play-button--disabled:hover {
+  transform: none;
+  box-shadow: 0 8px 30px var(--accent-glow), inset 0 2px 6px rgba(255,255,255,0.25);
+}
+
+/* ---------------- Skin panel ---------------- */
+.skin-panel { margin-top: 20px; }
+.skin-panel h3 { color: var(--accent); font-size: 15px; margin-bottom: 6px; }
+.skin-layout { display: flex; gap: 24px; margin-top: 16px; align-items: flex-start; }
+.skin-preview {
+  width: 128px; height: 128px; flex-shrink: 0;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--text-2); text-align: center; padding: 8px;
+  image-rendering: pixelated;
+}
+.skin-preview img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.skin-controls { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.model-toggle { display: flex; gap: 16px; font-size: 12.5px; color: var(--text-1); }
+.model-toggle label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.model-toggle input { width: auto; }
+.skin-target-row { display: flex; gap: 8px; }
+.skin-target-row select { flex: 1; }
+
+/* ---------------- Mod / Modpack search ---------------- */
+.mod-search-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+.mod-search-row .source-toggle { width: auto; flex: 0 0 220px; margin-bottom: 0; }
+#mod-search-input { flex: 1; min-width: 180px; }
+#mod-search-version, #mod-search-loader { width: 160px; }
+
+.mod-results { display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; }
+.mod-card {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px;
+}
+.mod-icon { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--bg-3); flex-shrink: 0; }
+.mod-info { flex: 1; min-width: 0; }
+.mod-title { font-size: 13.5px; font-weight: 600; }
+.mod-desc { font-size: 12px; color: var(--text-1); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-meta { font-size: 11px; color: var(--text-2); margin-top: 4px; }
+.mod-install-btn { flex-shrink: 0; padding: 8px 16px; font-size: 12.5px; }
+
+.installed-list { display: flex; flex-direction: column; gap: 8px; }
+.installed-item {
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; font-size: 13px; color: var(--text-1);
+}

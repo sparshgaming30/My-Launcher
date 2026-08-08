@@ -1,0 +1,34 @@
+{
+  "name": "custom-mc-launcher",
+  "version": "0.1.0",
+  "description": "A modern, SKLauncher-inspired Minecraft launcher with Premium (MSA) and Offline auth, plus Forge/Fabric auto-install.",
+  "main": "main.js",
+  "author": "you",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "minecraft-launcher-core": "^3.18.1",
+    "msmc": "^5.0.5",
+    "electron-store": "^8.2.0",
+    "node-fetch": "^2.7.0",
+    "adm-zip": "^0.5.14",
+    "jimp": "^0.22.12"
+  },
+  "build": {
+    "appId": "com.yourname.mclauncher",
+    "productName": "My Launcher",
+    "files": ["main.js", "preload.js", "core/**/*", "renderer/**/*", "build/icon.*"],
+    "win": { "target": "nsis", "icon": "build/icon.ico" },
+    "linux": { "target": "AppImage", "icon": "build/icon.png" },
+    "mac": { "target": "dmg", "icon": "build/icon.png" }
+  }
+}
