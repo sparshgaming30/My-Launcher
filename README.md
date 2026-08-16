@@ -10,6 +10,53 @@ npm run pack      # unpacked build (dist/win-unpacked) — no installer step, al
 npm run dist       # full NSIS installer (dist/My Launcher Setup 1.0.0.exe)
 ```
 
+## About the "Electron failed to install correctly" fix
+
+If `npm install` finishes with no errors, but then `npm start` throws:
+```
+Error: Electron failed to install correctly, please delete node_modules/electron and try installing again
+```
+— that's not actually Electron's fault, and deleting/reinstalling alone won't
+fix it. Here's what's really going on and how this project fixes it.
+
+**The cause:** npm 11.16+ (and npm 12, current as of mid-2026) gates every
+dependency's install/postinstall script behind an explicit approval list
+(`allowScripts`). By default, an unapproved script doesn't fail the install —
+it's **silently skipped**, with just a warning buried in the output. Electron
+ships its actual binary via its own `postinstall` script (`node install.js`)
+— when npm skips that unapproved, `npm install` reports success, but
+`electron.exe` was simply never downloaded. The real failure only shows up
+later, when you run `npm start` and Electron looks for a binary that doesn't
+exist.
+
+**The fix — a project-level `.npmrc` file** (already included in this repo,
+at the project root next to `package.json`):
+```
+dangerously-allow-all-scripts=true
+```
+This pre-authorizes every dependency's install script, so a plain
+`npm install` always runs them — no manual `npm approve-scripts` step, ever,
+for you or for anyone who clones this repo.
+
+**If you're hitting this on an existing broken install** (from before this
+`.npmrc` existed, or from an interrupted install), the fix is to wipe and
+reinstall clean once the file is in place:
+```bash
+rmdir /s /q node_modules
+del package-lock.json
+npm install
+npm start
+```
+(On macOS/Linux, use `rm -rf node_modules package-lock.json` instead of the
+two Windows commands above.)
+
+**Trade-off, stated plainly:** `dangerously-allow-all-scripts` runs every
+dependency's install script unreviewed, which is the exact supply-chain risk
+this npm feature exists to prevent. Reasonable for a small personal/hobby
+project with a known, short dependency list — not something to blanket-apply
+to something handling sensitive data without actually reviewing what's in
+`node_modules`.
+
 ## About the TLS / "socket disconnected" fix
 
 If you've been fighting `Client network socket disconnected before secure TLS
@@ -28,6 +75,7 @@ every machine that hit it, regardless of antivirus/network setup.
 patches the library itself to download in small batches (6 at a time)
 instead of all at once for assets, libraries, and natives. This was tested
 end-to-end in development: fresh install → patch auto-applies → verified via
+
 `node --check` and a grep for the patched function.
 
 If a future `npm install` bumps `minecraft-launcher-core` to a newer minor
