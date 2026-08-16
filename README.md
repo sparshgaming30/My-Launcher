@@ -105,15 +105,6 @@ my-launcher/
     └── renderer.js                         # UI-side script, calls window.api only
 ```
 
-## How offline mode bypasses official authentication
-
-`Authenticator.getAuth(username)` never talks to Microsoft or Mojang — it
-derives an offline UUID locally by hashing `"OfflinePlayer:<username>"` (the
-same convention Mojang's own server software uses in offline mode) and fills
-in a placeholder access token that's never verified. The client only checks
-that token against Mojang's session servers when joining an
-`online-mode=true` server. Premium login (via `msmc`) performs the real
-OAuth → Xbox Live → XSTS → Minecraft Services chain instead.
 
 ## Known gaps
 
