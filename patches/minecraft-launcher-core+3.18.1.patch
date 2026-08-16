@@ -1,0 +1,179 @@
+diff --git a/node_modules/minecraft-launcher-core/components/handler.js b/node_modules/minecraft-launcher-core/components/handler.js
+index 532d825..d2fea30 100644
+--- a/node_modules/minecraft-launcher-core/components/handler.js
++++ b/node_modules/minecraft-launcher-core/components/handler.js
+@@ -6,6 +6,20 @@ const Zip = require('adm-zip')
+ const child = require('child_process')
+ let counter = 0
+ 
++// PATCHED: run async work in small concurrent batches instead of firing every
++// item at once via Promise.all(array.map(...)). MCLC's downloader uses the
++// long-deprecated 'request' package, and for modern Minecraft versions the
++// asset index alone can contain 5,000+ files -- launching all of them
++// simultaneously routinely triggers 'Client network socket disconnected
++// before secure TLS connection was established' against Mojang's servers.
++// A small batch size keeps real concurrency low and reliable.
++async function runBatched (items, worker, batchSize = 6) {
++  for (let i = 0; i < items.length; i += batchSize) {
++    const batch = items.slice(i, i + batchSize)
++    await Promise.all(batch.map(worker))
++  }
++}
++
+ class Handler {
+   constructor (client) {
+     this.client = client
+@@ -34,7 +48,15 @@ class Handler {
+     })
+   }
+ 
+-  downloadAsync (url, directory, name, retry, type) {
++  downloadAsync (url, directory, name, retry, type, attempt = 1) {
++    // PATCHED: was a single immediate retry with zero backoff (2 total
++    // attempts). Bumped to 5 total attempts with increasing backoff delay,
++    // since the underlying 'request' library's TLS handshakes to Mojang's
++    // servers fail transiently often enough that one instant retry isn't
++    // reliable -- this is the actual cause of persistent 'Client network
++    // socket disconnected before secure TLS connection was established'
++    // failures even on small file counts where concurrency isn't a factor.
++    const MAX_ATTEMPTS = 5
+     return new Promise(resolve => {
+       fs.mkdirSync(directory, { recursive: true })
+ 
+@@ -43,6 +65,19 @@ class Handler {
+       let receivedBytes = 0
+       let totalBytes = 0
+ 
++      const retryOrGiveUp = async (err) => {
++        const willRetry = retry && attempt < MAX_ATTEMPTS
++        this.client.emit('debug', `[MCLC]: Failed to download asset to ${path.join(directory, name)} due to\n${err}.` +
++                    ` Retrying... ${willRetry} (attempt ${attempt}/${MAX_ATTEMPTS})`)
++        if (fs.existsSync(path.join(directory, name))) { try { fs.unlinkSync(path.join(directory, name)) } catch (e) {} }
++        if (willRetry) {
++          await new Promise(r => setTimeout(r, 400 * attempt))
++          resolve(await this.downloadAsync(url, directory, name, retry, type, attempt + 1))
++        } else {
++          resolve()
++        }
++      }
++
+       _request.on('response', (data) => {
+         if (data.statusCode === 404) {
+           this.client.emit('debug', `[MCLC]: Failed to download ${url} due to: File not found...`)
+@@ -52,12 +87,7 @@ class Handler {
+         totalBytes = parseInt(data.headers['content-length'])
+       })
+ 
+-      _request.on('error', async (error) => {
+-        this.client.emit('debug', `[MCLC]: Failed to download asset to ${path.join(directory, name)} due to\n${error}.` +
+-                    ` Retrying... ${retry}`)
+-        if (retry) await this.downloadAsync(url, directory, name, false, type)
+-        resolve()
+-      })
++      _request.on('error', (error) => { retryOrGiveUp(error) })
+ 
+       _request.on('data', (data) => {
+         receivedBytes += data.length
+@@ -80,13 +110,7 @@ class Handler {
+         })
+       })
+ 
+-      file.on('error', async (e) => {
+-        this.client.emit('debug', `[MCLC]: Failed to download asset to ${path.join(directory, name)} due to\n${e}.` +
+-                    ` Retrying... ${retry}`)
+-        if (fs.existsSync(path.join(directory, name))) fs.unlinkSync(path.join(directory, name))
+-        if (retry) await this.downloadAsync(url, directory, name, false, type)
+-        resolve()
+-      })
++      file.on('error', (e) => { retryOrGiveUp(e) })
+     })
+   }
+ 
+@@ -172,7 +196,7 @@ class Handler {
+       total: Object.keys(index.objects).length
+     })
+ 
+-    await Promise.all(Object.keys(index.objects).map(async asset => {
++    await runBatched(Object.keys(index.objects), async asset => {
+       const hash = index.objects[asset].hash
+       const subhash = hash.substring(0, 2)
+       const subAsset = path.join(assetDirectory, 'objects', subhash)
+@@ -186,7 +210,7 @@ class Handler {
+         task: counter,
+         total: Object.keys(index.objects).length
+       })
+-    }))
++    })
+     counter = 0
+ 
+     // Copy assets to legacy if it's an older Minecraft version.
+@@ -279,29 +303,41 @@ class Handler {
+         total: stat.length
+       })
+ 
+-      await Promise.all(stat.map(async (native) => {
++      await runBatched(stat, async (native) => {
+         if (!native) return
+         const name = native.path.split('/').pop()
+         await this.downloadAsync(native.url, nativeDirectory, name, true, 'natives')
+         if (!await this.checkSum(native.sha1, path.join(nativeDirectory, name))) {
+           await this.downloadAsync(native.url, nativeDirectory, name, true, 'natives')
+         }
+-        try {
+-          new Zip(path.join(nativeDirectory, name)).extractAllTo(nativeDirectory, true)
+-        } catch (e) {
+-          // Only doing a console.warn since a stupid error happens. You can basically ignore this.
+-          // if it says Invalid file name, just means two files were downloaded and both were deleted.
+-          // All is well.
+-          console.warn(e)
++        const nativeJarPath = path.join(nativeDirectory, name)
++        // PATCHED: only attempt to extract/delete if the file actually exists.
++        // Previously this ran unconditionally -- if downloadAsync exhausted all
++        // its retries and gave up (file never created, or removed during its own
++        // retry cleanup), extractAllTo() would throw 'Invalid filename' (caught,
++        // harmless) immediately followed by fs.unlinkSync() throwing ENOENT
++        // (NOT caught), which crashed the whole launch instead of just skipping
++        // the one native that failed to download.
++        if (fs.existsSync(nativeJarPath)) {
++          try {
++            new Zip(nativeJarPath).extractAllTo(nativeDirectory, true)
++          } catch (e) {
++            // Only doing a console.warn since a stupid error happens. You can basically ignore this.
++            // if it says Invalid file name, just means two files were downloaded and both were deleted.
++            // All is well.
++            console.warn(e)
++          }
++          if (fs.existsSync(nativeJarPath)) fs.unlinkSync(nativeJarPath)
++        } else {
++          this.client.emit('debug', `[MCLC]: Native ${name} failed to download after all retries -- skipping.`)
+         }
+-        fs.unlinkSync(path.join(nativeDirectory, name))
+         counter++
+         this.client.emit('progress', {
+           type: 'natives',
+           task: counter,
+           total: stat.length
+         })
+-      }))
++      })
+       this.client.emit('debug', '[MCLC]: Downloaded and extracted natives')
+     }
+ 
+@@ -474,7 +510,7 @@ class Handler {
+   async downloadToDirectory (directory, libraries, eventName) {
+     const libs = []
+ 
+-    await Promise.all(libraries.map(async library => {
++    await runBatched(libraries, async library => {
+       if (!library) return
+       if (this.parseRule(library)) return
+       const lib = library.name.split(':')
+@@ -511,7 +547,7 @@ class Handler {
+         total: libraries.length
+       })
+       libs.push(`${jarPath}${path.sep}${name}`)
+-    }))
++    })
+     counter = 0
+ 
+     return libs

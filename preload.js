@@ -1,59 +1,40 @@
-// preload.js — the ONLY bridge between the sandboxed renderer and Node/IPC.
-// Runs in an isolated context with access to a limited set of Node APIs
-// (contextBridge, ipcRenderer) even though the renderer itself has none.
-
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  // ---- window chrome (frameless window controls) ----
   window: {
     minimize: () => ipcRenderer.send('win:minimize'),
     maximize: () => ipcRenderer.send('win:maximize'),
     close: () => ipcRenderer.send('win:close'),
   },
 
-  // ---- auth ----
   loginOffline: (username) => ipcRenderer.invoke('auth:offline', username),
   loginMicrosoft: () => ipcRenderer.invoke('auth:microsoft'),
   getSavedProfile: () => ipcRenderer.invoke('auth:get-saved-profile'),
-  onMicrosoftStatus: (callback) =>
-    ipcRenderer.on('auth:microsoft:status', (_e, status) => callback(status)),
+  onMicrosoftStatus: (cb) => ipcRenderer.on('auth:microsoft:status', (_e, s) => cb(s)),
 
-  // ---- mod loader installers ----
-  installForge: (mcVersion, forgeVersion) =>
-    ipcRenderer.invoke('install:forge', { mcVersion, forgeVersion }),
-  installFabric: (mcVersion, loaderVersion) =>
-    ipcRenderer.invoke('install:fabric', { mcVersion, loaderVersion }),
-  onInstallProgress: (callback) =>
-    ipcRenderer.on('install:progress', (_e, data) => callback(data)),
-
-  // ---- launch ----
-  launchGame: (config) => ipcRenderer.invoke('game:launch', config),
-  onDownloadProgress: (callback) =>
-    ipcRenderer.on('game:download-progress', (_e, data) => callback(data)),
-  onGameLog: (callback) => ipcRenderer.on('game:log', (_e, line) => callback(line)),
-  onGameClosed: (callback) => ipcRenderer.on('game:closed', (_e, code) => callback(code)),
-
-  // ---- misc ----
+  installForge: (mcVersion, forgeVersion) => ipcRenderer.invoke('install:forge', { mcVersion, forgeVersion }),
+  installFabric: (mcVersion, loaderVersion) => ipcRenderer.invoke('install:fabric', { mcVersion, loaderVersion }),
+  onInstallProgress: (cb) => ipcRenderer.on('install:progress', (_e, d) => cb(d)),
   listVersions: () => ipcRenderer.invoke('versions:list'),
-  listInstances: () => ipcRenderer.invoke('instances:list'),
-  computeInstanceId: (mcVersion, loaderType, instanceName) =>
-    ipcRenderer.invoke('instances:compute-id', { mcVersion, loaderType, instanceName }),
 
-  // ---- skins ----
-  pickSkinFile: () => ipcRenderer.invoke('skins:pick-file'),
-  applySkin: (skinPath, mcVersion, loaderType, instanceName, model) =>
-    ipcRenderer.invoke('skins:apply', { skinPath, mcVersion, loaderType, instanceName, model }),
+  chooseSkin: () => ipcRenderer.invoke('skin:choose'),
+  getSavedSkin: () => ipcRenderer.invoke('skin:get-saved'),
+  setSkinModel: (model) => ipcRenderer.invoke('skin:set-model', model),
+  getSkinModel: () => ipcRenderer.invoke('skin:get-model'),
+  clearSkin: () => ipcRenderer.invoke('skin:clear'),
 
-  // ---- mods & modpacks (Modrinth) ----
-  searchMods: (query, mcVersion, loader, type) =>
-    ipcRenderer.invoke('mods:search', { query, mcVersion, loader, type }),
-  getModVersions: (projectId, mcVersion, loader) =>
-    ipcRenderer.invoke('mods:get-versions', { projectId, mcVersion, loader }),
-  installMod: (projectId, mcVersion, loaderType, instanceName) =>
-    ipcRenderer.invoke('mods:install', { projectId, mcVersion, loaderType, instanceName }),
-  installModpack: (mrpackUrl, packName) =>
-    ipcRenderer.invoke('modpack:install', { mrpackUrl, packName }),
-  onModpackProgress: (callback) =>
-    ipcRenderer.on('modpack:progress', (_e, data) => callback(data)),
+  searchMods: (query, mcVersion, loader) => ipcRenderer.invoke('mods:search', { query, mcVersion, loader }),
+  installMod: (projectId, mcVersion, loader) => ipcRenderer.invoke('mods:install', { projectId, mcVersion, loader }),
+  listMods: () => ipcRenderer.invoke('mods:list'),
+  removeMod: (fileName) => ipcRenderer.invoke('mods:remove', fileName),
+
+  searchModpacks: (query) => ipcRenderer.invoke('modpack:search', query),
+  installModpackById: (projectId) => ipcRenderer.invoke('modpack:install-by-id', projectId),
+  installModpackFile: () => ipcRenderer.invoke('modpack:install-file'),
+  onModpackProgress: (cb) => ipcRenderer.on('modpack:progress', (_e, d) => cb(d)),
+
+  launchGame: (config) => ipcRenderer.invoke('game:launch', config),
+  onDownloadProgress: (cb) => ipcRenderer.on('game:download-progress', (_e, d) => cb(d)),
+  onGameLog: (cb) => ipcRenderer.on('game:log', (_e, line) => cb(line)),
+  onGameClosed: (cb) => ipcRenderer.on('game:closed', (_e, code) => cb(code)),
 });

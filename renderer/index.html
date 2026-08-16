@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Custom titlebar (frameless window) -->
   <div class="titlebar">
     <div class="titlebar-brand">MY<span>LAUNCHER</span></div>
     <div class="titlebar-controls">
@@ -18,7 +17,6 @@
   </div>
 
   <div class="app-shell">
-    <!-- SIDEBAR -->
     <nav class="sidebar">
       <div class="sidebar-logo">
         <svg viewBox="0 0 24 24" width="26" height="26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -29,18 +27,10 @@
           </g>
         </svg>
       </div>
-      <button class="nav-item active" data-view="dashboard">
-        <span class="nav-icon">🏠</span> Dashboard
-      </button>
-      <button class="nav-item" data-view="profiles">
-        <span class="nav-icon">👤</span> Profiles
-      </button>
-      <button class="nav-item" data-view="modpacks">
-        <span class="nav-icon">📦</span> Modpack Downloader
-      </button>
-      <button class="nav-item" data-view="settings">
-        <span class="nav-icon">⚙</span> Settings
-      </button>
+      <button class="nav-item active" data-view="dashboard"><span class="nav-icon">🏠</span> Dashboard</button>
+      <button class="nav-item" data-view="profiles"><span class="nav-icon">👤</span> Profiles</button>
+      <button class="nav-item" data-view="modpacks"><span class="nav-icon">📦</span> Modpack Downloader</button>
+      <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> Settings</button>
 
       <div class="sidebar-account">
         <div class="account-avatar" id="account-avatar">?</div>
@@ -51,48 +41,30 @@
       </div>
     </nav>
 
-    <!-- MAIN CONTENT -->
     <main class="content">
 
-      <!-- DASHBOARD VIEW -->
       <section class="view active" id="view-dashboard">
-        <header class="view-header">
-          <h1>Dashboard</h1>
-          <p class="subtitle">Ready to jump back in?</p>
-        </header>
+        <header class="view-header"><h1>Dashboard</h1><p class="subtitle">Ready to jump back in?</p></header>
 
         <div class="dashboard-grid">
           <div class="panel play-panel">
-            <div class="source-toggle">
-              <button class="source-btn active" data-source="version" id="src-version-btn">Version</button>
-              <button class="source-btn" data-source="modpack" id="src-modpack-btn">Installed Modpack</button>
+            <div class="version-select-row">
+              <label>Minecraft Version</label>
+              <select id="select-version"><option value="">Loading versions...</option></select>
             </div>
+            <label class="checkbox-row"><input type="checkbox" id="chk-snapshots" /> Show snapshots &amp; older versions</label>
 
-            <div class="source-block active" id="source-version">
-              <div class="version-select-row">
-                <label>Minecraft Version</label>
-                <select id="select-mc-version"><option value="1.20.4">Loading versions...</option></select>
-              </div>
-              <label class="checkbox-row">
-                <input type="checkbox" id="chk-show-all-versions" />
-                Show snapshots &amp; older versions
-              </label>
-              <div class="version-select-row">
-                <label>Mod Loader</label>
-                <select id="select-loader">
-                  <option value="">None (Vanilla)</option>
-                  <option value="forge">Forge</option>
-                  <option value="fabric">Fabric</option>
-                </select>
-              </div>
+            <div class="version-select-row">
+              <label>Mod Loader</label>
+              <select id="select-loader">
+                <option value="none">None (Vanilla)</option>
+                <option value="fabric">Fabric</option>
+                <option value="forge">Forge</option>
+              </select>
             </div>
-
-            <div class="source-block" id="source-modpack">
-              <div class="version-select-row">
-                <label>Installed Modpack</label>
-                <select id="select-modpack-instance"><option value="">No modpacks installed yet</option></select>
-              </div>
-              <p class="hint">Install modpacks from the Modpack Downloader tab.</p>
+            <div class="version-select-row" id="loader-version-row" hidden>
+              <label>Loader Version (blank = latest)</label>
+              <input id="loader-version-input" placeholder="Leave blank for latest" />
             </div>
 
             <button id="btn-play" class="play-button">
@@ -113,26 +85,20 @@
         </div>
       </section>
 
-      <!-- PROFILES VIEW -->
       <section class="view" id="view-profiles">
-        <header class="view-header">
-          <h1>Profiles</h1>
-          <p class="subtitle">Sign in with Microsoft, or play offline with a custom name.</p>
-        </header>
+        <header class="view-header"><h1>Profiles</h1><p class="subtitle">Sign in with Microsoft, or play offline with a custom name.</p></header>
 
         <div class="panel login-panel">
           <div class="login-tabs">
             <button class="tab-btn active" data-tab="offline">Offline</button>
             <button class="tab-btn" data-tab="premium">Premium (Microsoft)</button>
           </div>
-
           <div class="tab-content active" id="tab-offline">
             <label for="offline-username">Username</label>
             <input id="offline-username" type="text" placeholder="Steve" maxlength="16" />
             <button id="btn-login-offline" class="accent-button">Use Offline Profile</button>
             <p class="hint">Offline mode works for singleplayer and offline-mode/cracked servers only.</p>
           </div>
-
           <div class="tab-content" id="tab-premium">
             <p class="hint">Sign in with your Microsoft account to verify game ownership and play on online-mode servers.</p>
             <button id="btn-login-microsoft" class="accent-button">Sign in with Microsoft</button>
@@ -141,102 +107,56 @@
         </div>
 
         <div class="panel skin-panel">
-          <h3>Custom Skin</h3>
-          <p class="hint">
-            Applies a local resource pack that overrides your player texture. Works fully offline
-            and needs no account verification — visible to you in singleplayer immediately.
-            Other players on a server will only see it if the server has its own skin system set up.
-          </p>
-
-          <div class="skin-layout">
+          <h3>Custom Skin (Offline Mode)</h3>
+          <p class="hint">Applies a resource pack that overrides your player texture. Local-only — other players on a server won't see it unless that server runs its own skin system.</p>
+          <div class="skin-row">
             <div class="skin-preview" id="skin-preview">No skin selected</div>
-
-            <div class="skin-controls">
-              <button id="btn-pick-skin" class="accent-button">Choose Skin PNG...</button>
-
-              <div class="model-toggle">
-                <label><input type="radio" name="skin-model" value="wide" checked /> Steve (classic arms)</label>
-                <label><input type="radio" name="skin-model" value="slim" /> Alex (slim arms)</label>
-              </div>
-
-              <label>Apply to</label>
-              <div class="skin-target-row">
-                <select id="skin-target-version"><option value="1.20.4">Loading versions...</option></select>
-                <select id="skin-target-loader">
-                  <option value="">Vanilla</option>
-                  <option value="forge">Forge</option>
-                  <option value="fabric">Fabric</option>
-                </select>
-              </div>
-
-              <button id="btn-apply-skin" class="accent-button" disabled>Apply Skin</button>
+            <div class="skin-actions">
+              <select id="select-skin-model">
+                <option value="classic">Classic arms</option>
+                <option value="slim">Slim arms (Alex)</option>
+              </select>
+              <button id="btn-choose-skin" class="accent-button">Choose Skin PNG</button>
+              <button id="btn-clear-skin" class="ghost-button">Remove</button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- MODPACK DOWNLOADER VIEW -->
       <section class="view" id="view-modpacks">
-        <header class="view-header">
-          <h1>Modpack Downloader</h1>
-          <p class="subtitle">Search and install mods or modpacks directly, or install a loader manually.</p>
-        </header>
+        <header class="view-header"><h1>Modpack Downloader</h1><p class="subtitle">Search and install mods or modpacks directly from Modrinth.</p></header>
 
         <div class="panel">
-          <div class="mod-search-row">
-            <div class="source-toggle">
-              <button class="source-btn active" data-modtype="mod" id="search-type-mod">Mods</button>
-              <button class="source-btn" data-modtype="modpack" id="search-type-modpack">Modpacks</button>
-            </div>
-            <input id="mod-search-input" placeholder="Search Modrinth..." />
-            <select id="mod-search-version"><option value="">Any version</option></select>
-            <select id="mod-search-loader">
-              <option value="">Any loader</option>
-              <option value="forge">Forge</option>
-              <option value="fabric">Fabric</option>
-            </select>
+          <h3>Installed Mods</h3>
+          <div class="mods-list" id="mods-list"></div>
+        </div>
+
+        <div class="panel">
+          <h3>Search Mods</h3>
+          <div class="search-row">
+            <input id="mod-search-input" placeholder="Search mods (e.g. Sodium)" />
             <button id="btn-mod-search" class="accent-button">Search</button>
           </div>
-
-          <div class="mod-results" id="mod-results">
-            <p class="hint">Search Modrinth for mods or modpacks above.</p>
-          </div>
+          <div class="search-results" id="mod-search-results"></div>
         </div>
 
-        <div class="panel" style="margin-top: 20px;">
-          <h3>Installed Modpacks</h3>
-          <div class="installed-list" id="installed-modpacks-list">
-            <p class="hint">None installed yet.</p>
+        <div class="panel">
+          <h3>Search Modpacks</h3>
+          <div class="search-row">
+            <input id="modpack-search-input" placeholder="Search modpacks" />
+            <button id="btn-modpack-search" class="accent-button">Search</button>
           </div>
-        </div>
-
-        <div class="panel" style="margin-top: 20px;">
-          <h3>Manual Loader Install</h3>
-          <p class="hint">Install Forge or Fabric directly for a specific version, without launching.</p>
-          <div class="loader-grid">
-            <div class="loader-card">
-              <h3>Forge</h3>
-              <input id="forge-mc-version" placeholder="Minecraft version, e.g. 1.20.4" />
-              <input id="forge-loader-version" placeholder="Forge version, or leave blank for recommended" />
-              <button id="btn-install-forge" class="accent-button">Install Forge</button>
-            </div>
-            <div class="loader-card">
-              <h3>Fabric</h3>
-              <input id="fabric-mc-version" placeholder="Minecraft version, e.g. 1.20.4" />
-              <input id="fabric-loader-version" placeholder="Loader version (leave blank = latest)" />
-              <button id="btn-install-fabric" class="accent-button">Install Fabric</button>
-            </div>
+          <div class="search-results" id="modpack-search-results"></div>
+          <button id="btn-import-modpack" class="ghost-button" style="margin-top:10px;">Or import a .mrpack file</button>
+          <div class="progress-wrap" id="modpack-progress-wrap" hidden>
+            <div class="progress-bar"><div class="progress-fill" id="modpack-progress-fill"></div></div>
+            <div class="progress-text" id="modpack-progress-text"></div>
           </div>
         </div>
       </section>
 
-      <!-- SETTINGS VIEW -->
       <section class="view" id="view-settings">
-        <header class="view-header">
-          <h1>Settings</h1>
-          <p class="subtitle">Java & memory allocation.</p>
-        </header>
-
+        <header class="view-header"><h1>Settings</h1><p class="subtitle">Java &amp; memory allocation.</p></header>
         <div class="panel">
           <label>Min Memory</label>
           <input id="mem-min" value="2G" />

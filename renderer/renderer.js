@@ -1,7 +1,4 @@
-// renderer/renderer.js
-// Runs inside the sandboxed webContents. Has NO Node/fs/mclc access — it can
-// only call the whitelisted methods preload.js exposed on window.api, which
-// forward to core/*.js in the main process over IPC.
+// renderer/renderer.js — sandboxed, no Node access. Only calls window.api.
 
 const log = (msg) => {
   const box = document.getElementById('log-box');
@@ -34,21 +31,18 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
   });
 });
 
-// ---------------- Active profile state ----------------
+// ---------------- Active profile ----------------
 let activeProfile = null;
 
 function setProfileUI(profile) {
   activeProfile = profile;
   document.getElementById('account-avatar').textContent = profile.name?.[0]?.toUpperCase() || '?';
   document.getElementById('account-name').textContent = profile.name || 'Unknown';
-  document.getElementById('account-type').textContent =
-    profile.type === 'microsoft' ? 'Premium (Microsoft)' : 'Offline';
+  document.getElementById('account-type').textContent = profile.type === 'microsoft' ? 'Premium (Microsoft)' : 'Offline';
 }
 
-// restore last session, if any
 window.api.getSavedProfile().then((p) => { if (p) setProfileUI(p); });
 
-// ---------------- Offline login ----------------
 document.getElementById('btn-login-offline').onclick = async () => {
   const username = document.getElementById('offline-username').value.trim();
   try {
@@ -60,7 +54,6 @@ document.getElementById('btn-login-offline').onclick = async () => {
   }
 };
 
-// ---------------- Microsoft login ----------------
 window.api.onMicrosoftStatus((status) => {
   document.getElementById('ms-status').textContent = status.message || '';
 });
@@ -76,369 +69,251 @@ document.getElementById('btn-login-microsoft').onclick = async () => {
   }
 };
 
-// =============================================================================
-// VERSION MANIFEST — fetched once, used to populate every version dropdown
-// =============================================================================
+// ---------------- Skin ----------------
+async function refreshSkinPreview() {
+  const skinPath = await window.api.getSavedSkin();
+  const preview = document.getElementById('skin-preview');
+  preview.textContent = skinPath ? skinPath.split(/[\\/]/).pop() : 'No skin selected';
+  const model = await window.api.getSkinModel();
+  document.getElementById('select-skin-model').value = model;
+}
+refreshSkinPreview();
 
-let versionManifest = null; // { latest, versions: [{id, type, releaseTime}, ...] }
-
-async function loadVersionManifest() {
+document.getElementById('btn-choose-skin').onclick = async () => {
   try {
-    versionManifest = await window.api.listVersions();
-    populateVersionSelect(document.getElementById('select-mc-version'), releasesOnly());
-    populateVersionSelect(document.getElementById('skin-target-version'), releasesOnly());
-    populateVersionSelect(document.getElementById('mod-search-version'), releasesOnly(), true);
+    const filePath = await window.api.chooseSkin();
+    if (filePath) {
+      log(`Skin selected: ${filePath.split(/[\\/]/).pop()}`);
+      await refreshSkinPreview();
+    }
   } catch (err) {
-    log(`Failed to load version list: ${err.message}`);
+    log(`Skin selection failed: ${err.message}`);
   }
-}
+};
 
-function releasesOnly() {
-  return versionManifest.versions.filter((v) => v.type === 'release');
-}
+document.getElementById('btn-clear-skin').onclick = async () => {
+  await window.api.clearSkin();
+  await refreshSkinPreview();
+  log('Custom skin removed.');
+};
 
-function populateVersionSelect(selectEl, versions, includeAnyOption = false) {
-  selectEl.innerHTML = '';
-  if (includeAnyOption) {
-    const anyOpt = document.createElement('option');
-    anyOpt.value = '';
-    anyOpt.textContent = 'Any version';
-    selectEl.appendChild(anyOpt);
-  }
+document.getElementById('select-skin-model').onchange = async (e) => {
+  await window.api.setSkinModel(e.target.value);
+};
+
+// ---------------- Version dropdown (live from Mojang manifest) ----------------
+let versionManifest = null;
+
+function populateVersionDropdown() {
+  if (!versionManifest) return;
+  const showAll = document.getElementById('chk-snapshots').checked;
+  const select = document.getElementById('select-version');
+  const previous = select.value;
+  select.innerHTML = '';
+  const versions = versionManifest.versions.filter((v) => showAll || v.type === 'release');
   for (const v of versions) {
     const opt = document.createElement('option');
     opt.value = v.id;
     opt.textContent = v.type === 'release' ? v.id : `${v.id} (${v.type})`;
-    selectEl.appendChild(opt);
+    select.appendChild(opt);
   }
+  if (versions.some((v) => v.id === previous)) select.value = previous;
 }
 
-document.getElementById('chk-show-all-versions').addEventListener('change', (e) => {
-  const versions = e.target.checked ? versionManifest.versions : releasesOnly();
-  populateVersionSelect(document.getElementById('select-mc-version'), versions);
+window.api.listVersions().then((manifest) => {
+  versionManifest = manifest;
+  populateVersionDropdown();
+}).catch((err) => log(`Failed to load version list: ${err.message}`));
+
+document.getElementById('chk-snapshots').addEventListener('change', populateVersionDropdown);
+
+// ---------------- Loader select ----------------
+document.getElementById('select-loader').addEventListener('change', (e) => {
+  document.getElementById('loader-version-row').hidden = e.target.value === 'none';
 });
 
-loadVersionManifest();
-
-// =============================================================================
-// DASHBOARD — source toggle (pick a version+loader vs. an installed modpack)
-// =============================================================================
-
-document.querySelectorAll('#source-version, #source-modpack').forEach((el) => {}); // no-op, ids used directly below
-
-document.getElementById('src-version-btn').addEventListener('click', () => setPlaySource('version'));
-document.getElementById('src-modpack-btn').addEventListener('click', () => setPlaySource('modpack'));
-
-function setPlaySource(source) {
-  document.getElementById('src-version-btn').classList.toggle('active', source === 'version');
-  document.getElementById('src-modpack-btn').classList.toggle('active', source === 'modpack');
-  document.getElementById('source-version').classList.toggle('active', source === 'version');
-  document.getElementById('source-modpack').classList.toggle('active', source === 'modpack');
+// ---------------- Mods: list / search / install / remove ----------------
+async function refreshModsList() {
+  const mods = await window.api.listMods();
+  const list = document.getElementById('mods-list');
+  list.innerHTML = '';
+  for (const mod of mods) {
+    const row = document.createElement('div');
+    row.className = 'mod-item';
+    row.innerHTML = `<span>${mod.name}</span>`;
+    const btn = document.createElement('button');
+    btn.textContent = 'Remove';
+    btn.onclick = async () => {
+      await window.api.removeMod(mod.name);
+      refreshModsList();
+      log(`Removed mod: ${mod.name}`);
+    };
+    row.appendChild(btn);
+    list.appendChild(row);
+  }
 }
-
-async function refreshInstalledModpacks() {
-  const instances = await window.api.listInstances(); // [{id, meta}]
-  const modpacks = instances.filter((i) => i.id.startsWith('modpack-') && i.meta);
-
-  const dashSelect = document.getElementById('select-modpack-instance');
-  const listPanel = document.getElementById('installed-modpacks-list');
-
-  if (!modpacks.length) {
-    dashSelect.innerHTML = '<option value="">No modpacks installed yet</option>';
-    listPanel.innerHTML = '<p class="hint">None installed yet.</p>';
-    return;
-  }
-
-  dashSelect.innerHTML = modpacks
-    .map((m) => `<option value="${m.id}">${m.meta.name} (${m.meta.mcVersion}${m.meta.loaderType ? ' / ' + m.meta.loaderType : ''})</option>`)
-    .join('');
-
-  listPanel.innerHTML = modpacks
-    .map((m) => `<div class="installed-item"><strong>${m.meta.name}</strong> — ${m.meta.mcVersion}${m.meta.loaderType ? ' (' + m.meta.loaderType + ' ' + m.meta.loaderVersion + ')' : ''}</div>`)
-    .join('');
-}
-
-refreshInstalledModpacks();
-
-// ---------------- Forge / Fabric manual installers ----------------
-document.getElementById('btn-install-forge').onclick = async () => {
-  const mcVersion = document.getElementById('forge-mc-version').value.trim();
-  const forgeVersion = document.getElementById('forge-loader-version').value.trim() || undefined;
-  if (!mcVersion) return log('Enter a Minecraft version.');
-  log(`Installing Forge for ${mcVersion}${forgeVersion ? ' (' + forgeVersion + ')' : ' (recommended)'}...`);
-  try {
-    const result = await window.api.installForge(mcVersion, forgeVersion);
-    log(`Forge ready: ${result.versionId}`);
-  } catch (err) {
-    log(`Forge install failed: ${err.message}`);
-  }
-};
-
-document.getElementById('btn-install-fabric').onclick = async () => {
-  const mcVersion = document.getElementById('fabric-mc-version').value.trim();
-  const loaderVersion = document.getElementById('fabric-loader-version').value.trim() || null;
-  if (!mcVersion) return log('Enter a Minecraft version.');
-  log(`Installing Fabric for ${mcVersion}...`);
-  try {
-    const result = await window.api.installFabric(mcVersion, loaderVersion);
-    log(`Fabric ready: ${result.versionId}`);
-  } catch (err) {
-    log(`Fabric install failed: ${err.message}`);
-  }
-};
-
-window.api.onInstallProgress((data) => {
-  if (data.message) log(data.message);
-});
-
-// =============================================================================
-// SKINS
-// =============================================================================
-
-let pickedSkinPath = null;
-
-document.getElementById('btn-pick-skin').onclick = async () => {
-  const picked = await window.api.pickSkinFile();
-  if (!picked) return;
-  pickedSkinPath = picked.path;
-
-  const preview = document.getElementById('skin-preview');
-  preview.innerHTML = '';
-  const img = document.createElement('img');
-  img.src = picked.dataUrl;
-  img.alt = 'Skin preview';
-  preview.appendChild(img);
-
-  document.getElementById('btn-apply-skin').disabled = false;
-};
-
-document.getElementById('btn-apply-skin').onclick = async () => {
-  if (!pickedSkinPath) return;
-  const model = document.querySelector('input[name="skin-model"]:checked').value;
-  const mcVersion = document.getElementById('skin-target-version').value;
-  const loaderType = document.getElementById('skin-target-loader').value || null;
-
-  const btn = document.getElementById('btn-apply-skin');
-  btn.disabled = true;
-  log(`Applying skin to ${mcVersion}${loaderType ? ' (' + loaderType + ')' : ''}...`);
-  try {
-    await window.api.applySkin(pickedSkinPath, mcVersion, loaderType, null, model);
-    log('Skin applied. It will show next time that instance launches.');
-  } catch (err) {
-    log(`Skin apply failed: ${err.message}`);
-  } finally {
-    btn.disabled = false;
-  }
-};
-
-// =============================================================================
-// MODS & MODPACKS (Modrinth search)
-// =============================================================================
-
-let searchType = 'mod';
-
-document.getElementById('search-type-mod').addEventListener('click', () => setSearchType('mod'));
-document.getElementById('search-type-modpack').addEventListener('click', () => setSearchType('modpack'));
-
-function setSearchType(type) {
-  searchType = type;
-  document.getElementById('search-type-mod').classList.toggle('active', type === 'mod');
-  document.getElementById('search-type-modpack').classList.toggle('active', type === 'modpack');
-}
+refreshModsList();
 
 document.getElementById('btn-mod-search').onclick = async () => {
   const query = document.getElementById('mod-search-input').value.trim();
-  const mcVersion = document.getElementById('mod-search-version').value || undefined;
-  const loader = document.getElementById('mod-search-loader').value || undefined;
-  const resultsEl = document.getElementById('mod-results');
-
-  resultsEl.innerHTML = '<p class="hint">Searching...</p>';
+  const mcVersion = document.getElementById('select-version').value;
+  const loaderSel = document.getElementById('select-loader').value;
+  const resultsBox = document.getElementById('mod-search-results');
+  resultsBox.innerHTML = 'Searching...';
   try {
-    const results = await window.api.searchMods(query, mcVersion, loader, searchType);
-    renderModResults(results, { mcVersion, loader });
+    const results = await window.api.searchMods(query, mcVersion, loaderSel !== 'none' ? loaderSel : undefined);
+    resultsBox.innerHTML = '';
+    for (const mod of results) {
+      const row = document.createElement('div');
+      row.className = 'search-result-item';
+      row.innerHTML = `<div class="info"><div class="title">${mod.title}</div><div class="desc">${mod.description || ''}</div></div>`;
+      const btn = document.createElement('button');
+      btn.className = 'accent-button';
+      btn.textContent = 'Install';
+      btn.onclick = async () => {
+        if (loaderSel === 'none') { log('Select a mod loader (Fabric/Forge) on the Dashboard first.'); return; }
+        try {
+          log(`Installing ${mod.title}...`);
+          const result = await window.api.installMod(mod.id, mcVersion, loaderSel);
+          log(`Installed: ${result.filename}`);
+          refreshModsList();
+        } catch (err) {
+          log(`Install failed: ${err.message}`);
+        }
+      };
+      row.appendChild(btn);
+      resultsBox.appendChild(row);
+    }
+    if (!results.length) resultsBox.innerHTML = '<p class="hint">No results.</p>';
   } catch (err) {
-    resultsEl.innerHTML = `<p class="hint">Search failed: ${err.message}</p>`;
+    resultsBox.innerHTML = '';
+    log(`Mod search failed: ${err.message}`);
   }
 };
 
-function renderModResults(results, filters) {
-  const resultsEl = document.getElementById('mod-results');
-  if (!results.length) {
-    resultsEl.innerHTML = '<p class="hint">No results.</p>';
-    return;
-  }
-
-  resultsEl.innerHTML = '';
-  for (const r of results) {
-    const card = document.createElement('div');
-    card.className = 'mod-card';
-    card.innerHTML = `
-      <img class="mod-icon" src="${r.iconUrl || ''}" onerror="this.style.visibility='hidden'" />
-      <div class="mod-info">
-        <div class="mod-title">${escapeHtml(r.title)}</div>
-        <div class="mod-desc">${escapeHtml(r.description || '')}</div>
-        <div class="mod-meta">by ${escapeHtml(r.author || 'unknown')} · ${r.downloads?.toLocaleString?.() || 0} downloads</div>
-      </div>
-      <button class="accent-button mod-install-btn">Install</button>
-    `;
-    card.querySelector('.mod-install-btn').onclick = (e) => installSearchResult(r, filters, e.target);
-    resultsEl.appendChild(card);
-  }
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-async function installSearchResult(result, filters, btnEl) {
-  btnEl.disabled = true;
-  btnEl.textContent = 'Installing...';
-
-  try {
-    if (result.type === 'mod') {
-      if (!filters.mcVersion) {
-        log('Pick a Minecraft version filter before installing a mod (so it goes in the right instance).');
-        return;
-      }
-      const installed = await window.api.installMod(result.id, filters.mcVersion, filters.loader || null, null);
-      log(`Installed mod: ${installed.filename}`);
-      btnEl.textContent = 'Installed';
-    } else {
-      log(`Resolving download for modpack "${result.title}"...`);
-      const versions = await window.api.getModVersions(result.id, filters.mcVersion, filters.loader);
-      if (!versions.length) throw new Error('No compatible modpack version found for that filter.');
-      const file = versions[0].files.find((f) => f.primary) || versions[0].files[0];
-
-      log(`Installing modpack "${result.title}"...`);
-      document.getElementById('progress-wrap').hidden = false;
-      await window.api.installModpack(file.url, result.title);
-      document.getElementById('progress-wrap').hidden = true;
-
-      log(`Modpack "${result.title}" installed.`);
-      btnEl.textContent = 'Installed';
-      await refreshInstalledModpacks();
-    }
-  } catch (err) {
-    log(`Install failed: ${err.message}`);
-    btnEl.textContent = 'Install';
-    btnEl.disabled = false;
-  }
-}
-
+// ---------------- Modpacks: search / install ----------------
 window.api.onModpackProgress((data) => {
-  const fill = document.getElementById('progress-fill');
-  const text = document.getElementById('progress-text');
-  if (data.percent != null) fill.style.width = `${data.percent}%`;
-  if (data.message) text.textContent = data.message;
+  const wrap = document.getElementById('modpack-progress-wrap');
+  wrap.hidden = false;
+  if (typeof data.percent === 'number') {
+    document.getElementById('modpack-progress-fill').style.width = `${data.percent}%`;
+  }
+  document.getElementById('modpack-progress-text').textContent = data.message || '';
+  if (data.message) log(data.message);
 });
 
-// =============================================================================
-// PLAY
-// =============================================================================
+document.getElementById('btn-modpack-search').onclick = async () => {
+  const query = document.getElementById('modpack-search-input').value.trim();
+  const resultsBox = document.getElementById('modpack-search-results');
+  resultsBox.innerHTML = 'Searching...';
+  try {
+    const results = await window.api.searchModpacks(query);
+    resultsBox.innerHTML = '';
+    for (const pack of results) {
+      const row = document.createElement('div');
+      row.className = 'search-result-item';
+      row.innerHTML = `<div class="info"><div class="title">${pack.title}</div><div class="desc">${pack.description || ''}</div></div>`;
+      const btn = document.createElement('button');
+      btn.className = 'accent-button';
+      btn.textContent = 'Install';
+      btn.onclick = async () => {
+        try {
+          const result = await window.api.installModpackById(pack.id);
+          log(`Modpack installed: ${result.name} (MC ${result.mcVersion}${result.loader ? ', ' + result.loader.type : ''})`);
+          document.getElementById('modpack-progress-wrap').hidden = true;
+        } catch (err) {
+          log(`Modpack install failed: ${err.message}`);
+        }
+      };
+      row.appendChild(btn);
+      resultsBox.appendChild(row);
+    }
+    if (!results.length) resultsBox.innerHTML = '<p class="hint">No results.</p>';
+  } catch (err) {
+    resultsBox.innerHTML = '';
+    log(`Modpack search failed: ${err.message}`);
+  }
+};
 
+document.getElementById('btn-import-modpack').onclick = async () => {
+  try {
+    const result = await window.api.installModpackFile();
+    if (result) {
+      log(`Modpack installed: ${result.name} (MC ${result.mcVersion}${result.loader ? ', ' + result.loader.type : ''})`);
+    }
+    document.getElementById('modpack-progress-wrap').hidden = true;
+  } catch (err) {
+    log(`Modpack import failed: ${err.message}`);
+  }
+};
+
+// ---------------- PLAY ----------------
 window.api.onDownloadProgress((data) => {
   const wrap = document.getElementById('progress-wrap');
-  const fill = document.getElementById('progress-fill');
-  const text = document.getElementById('progress-text');
   wrap.hidden = false;
   if (data.total) {
     const pct = Math.round((data.task / data.total) * 100);
-    fill.style.width = `${pct}%`;
+    document.getElementById('progress-fill').style.width = `${pct}%`;
   }
-  text.textContent = data.type ? `Downloading ${data.type}...` : 'Preparing...';
+  document.getElementById('progress-text').textContent = data.type ? `Downloading ${data.type}...` : 'Preparing...';
 });
 
 window.api.onGameLog((line) => log(line));
 
-function setPlayButtonEnabled(enabled) {
-  const playBtn = document.getElementById('btn-play');
-  playBtn.disabled = !enabled;
-  playBtn.classList.toggle('play-button--disabled', !enabled);
+function setPlayEnabled(enabled) {
+  const btn = document.getElementById('btn-play');
+  btn.disabled = !enabled;
+  btn.classList.toggle('play-button--disabled', !enabled);
 }
 
 window.api.onGameClosed((code) => {
   log(`Game exited with code ${code}`);
   document.getElementById('progress-wrap').hidden = true;
-  setPlayButtonEnabled(true);
+  setPlayEnabled(true);
 });
 
 document.getElementById('btn-play').onclick = async () => {
-  const playBtn = document.getElementById('btn-play');
-  if (playBtn.disabled) return; // guards rapid double-fire before the async work below even starts
+  if (document.getElementById('btn-play').disabled) return;
+  if (!activeProfile) { log('Log in first (Profiles tab) before launching.'); return; }
 
-  if (!activeProfile) {
-    log('Log in first (Profiles tab) before launching.');
-    return;
-  }
+  setPlayEnabled(false);
 
-  setPlayButtonEnabled(false);
-
-  const source = document.getElementById('src-modpack-btn').classList.contains('active') ? 'modpack' : 'version';
+  const mcVersion = document.getElementById('select-version').value;
+  const loaderType = document.getElementById('select-loader').value;
+  const loaderVersionInput = document.getElementById('loader-version-input').value.trim() || null;
 
   const config = {
     profile: activeProfile,
+    version: { number: mcVersion, type: 'release' },
     memory: {
-      min: document.getElementById('mem-min')?.value || '2G',
-      max: document.getElementById('mem-max')?.value || '4G',
+      min: document.getElementById('mem-min').value || '2G',
+      max: document.getElementById('mem-max').value || '4G',
     },
-    javaPath: document.getElementById('java-path')?.value || 'auto',
+    javaPath: document.getElementById('java-path').value || 'auto',
     loader: null,
   };
 
   try {
-    if (source === 'modpack') {
-      const instId = document.getElementById('select-modpack-instance').value;
-      if (!instId) {
-        log('No modpack selected. Install one from the Modpack Downloader tab first.');
-        return;
-      }
-      const instances = await window.api.listInstances();
-      const inst = instances.find((i) => i.id === instId);
-      if (!inst?.meta) throw new Error('Could not read modpack metadata.');
-
-      config.instanceId = instId;
-      config.version = { number: inst.meta.mcVersion, type: 'release' };
-
-      if (inst.meta.loaderType === 'forge') {
-        log('Preparing Forge for this modpack...');
-        const forgeResult = await window.api.installForge(inst.meta.mcVersion, inst.meta.loaderVersion);
-        config.loader = { type: 'forge', forge: forgeResult.installerPath };
-      } else if (inst.meta.loaderType === 'fabric') {
-        log('Preparing Fabric for this modpack...');
-        const fabricResult = await window.api.installFabric(inst.meta.mcVersion, inst.meta.loaderVersion);
-        config.loader = { type: 'fabric', versionId: fabricResult.versionId };
-      }
-
-      log(`Launching modpack "${inst.meta.name}"...`);
-    } else {
-      const mcVersion = document.getElementById('select-mc-version').value;
-      const loaderType = document.getElementById('select-loader').value;
-
-      config.version = { number: mcVersion, type: 'release' };
-
-      if (loaderType === 'forge') {
-        log('Resolving Forge install...');
-        const forgeResult = await window.api.installForge(mcVersion, undefined); // undefined -> auto "recommended"
-        config.loader = { type: 'forge', forge: forgeResult.installerPath };
-      } else if (loaderType === 'fabric') {
-        log('Resolving Fabric install...');
-        const fabricResult = await window.api.installFabric(mcVersion, null);
-        config.loader = { type: 'fabric', versionId: fabricResult.versionId };
-      }
-
-      log(`Launching Minecraft ${mcVersion}${loaderType ? ' (' + loaderType + ')' : ''}...`);
+    if (loaderType === 'forge') {
+      log('Resolving Forge install...');
+      const forgeResult = await window.api.installForge(mcVersion, loaderVersionInput || 'latest');
+      config.loader = { type: 'forge', forge: forgeResult.installerPath };
+    } else if (loaderType === 'fabric') {
+      log('Resolving Fabric install...');
+      const fabricResult = await window.api.installFabric(mcVersion, loaderVersionInput);
+      config.loader = { type: 'fabric', versionId: fabricResult.versionId };
     }
 
+    log(`Launching Minecraft ${mcVersion}${loaderType !== 'none' ? ' (' + loaderType + ')' : ''}...`);
     document.getElementById('progress-wrap').hidden = false;
+
     await window.api.launchGame(config);
+    // NOTE: intentionally NOT re-enabling PLAY here -- it stays disabled
+    // until the 'game:closed' event fires, since launchGame() resolving
+    // just means the process spawned, not that it's done running.
   } catch (err) {
     log(`Launch failed: ${err.message}`);
     document.getElementById('progress-wrap').hidden = true;
-    setPlayButtonEnabled(true);
+    setPlayEnabled(true);
   }
-  // Note: on success we deliberately do NOT re-enable here — the button
-  // stays disabled until game:closed fires (see onGameClosed above), since
-  // launchGame() resolving just means the process *started*, not exited.
 };

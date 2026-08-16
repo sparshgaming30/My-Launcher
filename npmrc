@@ -1,0 +1,18 @@
+# npm 11.16+/12 gates every dependency's install/postinstall script behind an
+# explicit approval list (allowScripts). Without this, npm install "succeeds"
+# but silently SKIPS scripts it hasn't been told to trust -- including
+# Electron's own postinstall, which is what actually downloads electron.exe.
+# That's why `npm install` looked fine but `npm start` then failed with
+# "Electron failed to install correctly, please delete node_modules/electron
+# and try installing again": there was nothing to delete-and-retry, the
+# binary was simply never downloaded in the first place.
+#
+# This pre-authorizes every dependency's install script so a plain
+# `npm install` always runs them, with no manual `npm approve-scripts` step.
+#
+# Trade-off, stated plainly: this runs every dependency's install script
+# unreviewed, which is the exact supply-chain risk this npm feature exists
+# to prevent. Reasonable for a small personal/hobby project with a known,
+# short dependency list -- not something to blanket-enable on something
+# handling sensitive data without actually reviewing what's in node_modules.
+dangerously-allow-all-scripts=true
